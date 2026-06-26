@@ -46,9 +46,13 @@ jobs:
           sed -i 's/-Werror=return-type//g' Makefile
           sed -i 's/-Werror//g' Makefile
 
-          # Fix ALL extern inline + always_inline issues across the entire kernel tree
-          # GCC 11+ requires function body for always_inline+inline; remove inline from extern declarations
-          find . -name '*.h' -o -name '*.c' | xargs sed -i 's/\bextern inline\b/extern/g' 2>/dev/null || true
+          # Fix ALL inline-related issues across the entire kernel tree for GCC 11+
+          # 1. "extern inline" → "extern" (remove inline from extern declarations)
+          # 2. bare "inline void/int/..." declarations (ending with ;) → remove inline keyword
+          find . \( -name '*.h' -o -name '*.c' \) -exec sed -i \
+            -e 's/\bextern inline\b/extern/g' \
+            -e '/^\t*inline \(void\|int\|bool\|struct\|unsigned\|char\) .*;$/s/\t*inline /\t/' \
+            {} + 2>/dev/null || true
 
           echo "Patches applied"
 
