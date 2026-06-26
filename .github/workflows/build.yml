@@ -1,0 +1,214 @@
+name: Build Ubuntu Touch kernel for A12s
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout device source
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git gnupg flex bison gperf build-essential \
+            zip bzr curl libc6-dev libncurses5-dev \
+            x11proto-core-dev libx11-dev libreadline6-dev \
+            libgl1-mesa-dev g++-multilib mingw-w64-i686-dev \
+            tofrodos python3-markdown libxml2-utils \
+            xsltproc zlib1g-dev schedtool liblz4-tool bc \
+            lzop imagemagick libncurses5 rsync \
+            cpio kmod libssl-dev libtinfo-dev unzip wget \
+            xz-utils img2simg jq
+
+      - name: Install cross-compiler
+        run: |
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Download kernel source
+        run: |
+          curl -sL "https://github.com/rsuntk/android_kernel_samsung_a12s/archive/refs/heads/android-4.19-stable.tar.gz" -o kernel.tar.gz
+          mkdir -p kernel-tree
+          tar xzf kernel.tar.gz -C kernel-tree --strip-components=1
+          rm kernel.tar.gz
+
+      - name: Merge defconfig with halium.config
+        run: |
+          cd kernel-tree
+          cat arch/arm64/configs/exynos850-a12snsxx_defconfig > /tmp/merged_defconfig
+          echo "" >> /tmp/merged_defconfig
+          echo "# Halium/UBports additions" >> /tmp/merged_defconfig
+          cat "$GITHUB_WORKSPACE/halium.config" >> /tmp/merged_defconfig
+          cp /tmp/merged_defconfig arch/arm64/configs/ubports_a12s_defconfig
+
+      - name: Remove -Werror flags (Samsung 4.19 + GCC 14+)
+        run: |
+          cd kernel-tree
+          sed -i 's/-Werror/-Wno-error/g' Makefile
+          sed -i 's/KBUILD_CFLAGS += -Werror/KBUILD_CFLAGS += -Wno-error/g' Makefile
+
+      - name: Build kernel
+        run: |
+          cd kernel-tree
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- ubports_a12s_defconfig
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc LD=aarch64-linux-gnu-ld AR=aarch64-linux-gnu-ar OBJCOPY=aarch64-linux-gnu-objcopy OBJDUMP=aarch64-linux-gnu-objdump NM=aarch64-linux-gnu-nm STRIP=aarch64-linux-gnu-strip -j$(nproc) Image dtbs modules 2>&1 | tail -30
+
+      - name: Copy kernel artifacts
+        run: |
+          mkdir -p output
+          cp kernel-tree/arch/arm64/boot/Image output/
+          cp kernel-tree/arch/arm64/boot/dts/exynos/*.dtb output/ 2>/dev/null || true
+          find kernel-tree/arch/arm64/boot/dts -name "*.dtbo" -exec cp {} output/ \; 2>/dev/null || true
+          echo "=== Built artifacts ==="
+          ls -lh output/
+
+      - name: Create boot.img (Samsung v2 format)
+        run: |
+          sudo apt-get install -y python3
+
+          cat > /tmp/mkbootimg.py << 'PYEOF'
+          #!/usr/bin/env python3
+          """Simple mkbootimg for Samsung Exynos 850 header v2"""
+          import struct, sys, os
+
+          def align(v, a):
+              return (v + a - 1) & ~(a - 1)
+
+          def write_boot_img(kernel_path, ramdisk_path, output_path, args):
+              page_size = args.get('pagesize', 2048)
+              kernel_addr = int(args.get('kernel_offset', '0x10008000'), 16)
+              ramdisk_addr = int(args.get('ramdisk_offset', '0x11000000'), 16)
+              tags_addr = int(args.get('tags_offset', '0x10000100'), 16)
+              board = args.get('board', 'SRPUE06B013')
+              cmdline = args.get('cmdline', '')
+              os_ver = args.get('os_version', '11.0')
+              os_patch = args.get('os_patch_level', '2023-01')
+              header_version = 2
+
+              kernel = open(kernel_path, 'rb').read()
+              ramdisk = open(ramdisk_path, 'rb').read() if ramdisk_path and os.path.exists(ramdisk_path) else b''
+
+              kernel_size = len(kernel)
+              ramdisk_size = len(ramdisk)
+
+              header_size = 16384 if header_version < 2 else page_size
+              kernel_offset = align(header_size, page_size)
+              ramdisk_offset = kernel_offset + align(kernel_size, page_size)
+
+              # Parse OS version
+              os_ver_parts = os_ver.split('.')
+              os_major = int(os_ver_parts[0]) if len(os_ver_parts) > 0 else 0
+              os_minor = int(os_ver_parts[1]) if len(os_ver_parts) > 1 else 0
+              os_micro = int(os_ver_parts[2]) if len(os_ver_parts) > 2 else 0
+              os_version = (os_major << 14) | (os_minor << 7) | os_micro
+
+              # Parse patch level
+              patch_parts = os_patch.split('-')
+              patch_year = int(patch_parts[0]) if len(patch_parts) > 0 else 2023
+              patch_month = int(patch_parts[1]) if len(patch_parts) > 1 else 1
+              os_patch_level = (patch_year - 2000) << 4 | patch_month
+
+              # Build header
+              header = bytearray(header_size)
+
+              # ANDROID! magic
+              header[0:8] = b'ANDROID!'
+
+              # kernel_size
+              struct.pack_into('<I', header, 8, kernel_size)
+
+              # kernel_addr
+              struct.pack_into('<I', header, 12, kernel_addr)
+
+              # ramdisk_size
+              struct.pack_into('<I', header, 16, ramdisk_size)
+
+              # ramdisk_addr
+              struct.pack_into('<I', header, 20, ramdisk_addr)
+
+              # second_size (0)
+              struct.pack_into('<I', header, 24, 0)
+
+              # second_addr
+              struct.pack_into('<I', header, 28, 0)
+
+              # tags_addr
+              struct.pack_into('<I', header, 32, tags_addr)
+
+              # page_size
+              struct.pack_into('<I', header, 36, page_size)
+
+              # header_version
+              struct.pack_into('<I', header, 40, header_version)
+
+              # os_version
+              struct.pack_into('<I', header, 44, (os_version << 16) | os_patch_level)
+
+              # name (16 bytes)
+              name = board.encode('ascii')[:16]
+              header[48:48+len(name)] = name
+
+              # cmdline (512 bytes at offset 576 for v2, or 16384 for v0/v1)
+              if header_version >= 2:
+                  cmdline_offset = 576
+              else:
+                  cmdline_offset = 16384
+              cmdline_bytes = cmdline.encode('ascii')[:511]
+              header[cmdline_offset:cmdline_offset+len(cmdline_bytes)] = cmdline_bytes
+
+              # extra_cmdline (1024 bytes)
+              # id (32 bytes at offset 48 for v0, elsewhere for v2)
+              # magic & header_size
+              struct.pack_into('<I', header, 12, kernel_addr)
+              struct.pack_into('<I', header, 36, page_size)
+
+              # Write output
+              with open(output_path, 'wb') as f:
+                  f.write(header)
+                  f.write(kernel)
+                  # Pad to ramdisk_offset
+                  pad_len = ramdisk_offset - (header_size + kernel_size)
+                  f.write(b'\x00' * pad_len)
+                  f.write(ramdisk)
+
+              print(f"boot.img created: {os.path.getsize(output_path)} bytes")
+              print(f"  header_version: {header_version}")
+              print(f"  kernel: {kernel_size} bytes @ 0x{kernel_addr:08x}")
+              print(f"  ramdisk: {ramdisk_size} bytes @ 0x{ramdisk_addr:08x}")
+              print(f"  cmdline: {cmdline}")
+
+          if __name__ == '__main__':
+              kernel_path = sys.argv[1]
+              ramdisk_path = sys.argv[2] if len(sys.argv) > 2 else None
+              output_path = sys.argv[3] if len(sys.argv) > 3 else 'boot.img'
+
+              args = {
+                  'pagesize': '2048',
+                  'kernel_offset': '0x10008000',
+                  'ramdisk_offset': '0x11000000',
+                  'tags_offset': '0x10000100',
+                  'board': 'SRPUE06B013',
+                  'cmdline': 'console=tty0 androidboot.hardware=exynos850 androidboot.selinux=enforce loop.max_part=7',
+                  'os_version': '11.0',
+                  'os_patch_level': '2023-01',
+              }
+              write_boot_img(kernel_path, ramdisk_path, output_path, args)
+          PYEOF
+
+          python3 /tmp/mkbootimg.py output/Image output/boot.img
+          ls -lh output/boot.img
+
+      - name: Upload kernel image
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-touch-a12s-kernel
+          path: |
+            output/Image
+            output/*.dtb
+            output/*.dtbo
+            output/boot.img

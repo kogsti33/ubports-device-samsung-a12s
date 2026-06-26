@@ -1,0 +1,35 @@
+deviceinfo_name="Samsung Galaxy A12s"
+deviceinfo_manufacturer="Samsung"
+deviceinfo_codename="a12s"
+deviceinfo_arch="aarch64"
+
+deviceinfo_kernel_source="https://github.com/rsuntk/android_kernel_samsung_a12s"
+deviceinfo_kernel_source_branch="android-4.19-stable"
+deviceinfo_kernel_defconfig="exynos850-a12snsxx_defconfig halium.config"
+
+deviceinfo_kernel_cmdline="console=tty0 androidboot.hardware=exynos850 androidboot.selinux=enforce loop.max_part=7"
+deviceinfo_kernel_clang_compile="true"
+deviceinfo_kernel_use_lld="true"
+
+deviceinfo_ramdisk_compression="lz4"
+deviceinfo_halium_version="11"
+
+deviceinfo_bootimg_header_version="2"
+deviceinfo_bootimg_board="SRPUE06B013"
+deviceinfo_bootimg_partition_size="47185920"
+deviceinfo_bootimg_tailtype="SEAndroid"
+
+deviceinfo_has_recovery_partition="true"
+deviceinfo_recovery_partition_size="47185920"
+
+deviceinfo_flash_pagesize="2048"
+deviceinfo_flash_offset_base="0x00000000"
+deviceinfo_flash_offset_kernel="0x10008000"
+deviceinfo_flash_offset_ramdisk="0x11000000"
+deviceinfo_flash_offset_second="0x00000000"
+deviceinfo_flash_offset_tags="0x10000100"
+
+deviceinfo_bootimg_os_version="11.0"
+deviceinfo_bootimg_os_patch_level="2023-01"
+
+deviceinfo_use_overlaystore="true"
