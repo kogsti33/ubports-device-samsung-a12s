@@ -41,8 +41,10 @@ jobs:
           printf '#!/bin/sh\necho "GNU 110000"\nexit 0\n' > scripts/as-version.sh
           chmod +x scripts/as-version.sh
 
-          # Remove -Werror from Makefile
-          sed -i 's/-Werror/-Wno-error/g' Makefile
+          # Remove all -Werror flags from Makefile
+          sed -i '/-Werror/d' Makefile
+          sed -i '/KBUILD_CFLAGS.*-Werror/d' Makefile
+          sed -i '/KBUILD_AFLAGS.*-Werror/d' Makefile
 
           # Fix extern inline GCC 11+ issue in mm.h
           sed -i 's/extern inline/static inline/g' include/linux/mm.h 2>/dev/null || true
