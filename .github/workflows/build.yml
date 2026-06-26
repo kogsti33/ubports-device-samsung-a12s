@@ -64,7 +64,9 @@ jobs:
         run: |
           cd kernel-tree
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- ubports_a12s_defconfig
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc LD=aarch64-linux-gnu-ld AR=aarch64-linux-gnu-ar OBJCOPY=aarch64-linux-gnu-objcopy OBJDUMP=aarch64-linux-gnu-objdump NM=aarch64-linux-gnu-nm STRIP=aarch64-linux-gnu-strip -j$(nproc) Image dtbs modules 2>&1 | tail -30
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc LD=aarch64-linux-gnu-ld AR=aarch64-linux-gnu-ar OBJCOPY=aarch64-linux-gnu-objcopy OBJDUMP=aarch64-linux-gnu-objdump NM=aarch64-linux-gnu-nm STRIP=aarch64-linux-gnu-strip -j$(nproc) Image dtbs modules 2>&1 | tee /tmp/build.log | tail -60
+          echo "=== LAST ERRORS ==="
+          grep -i "error:" /tmp/build.log | grep -v "Werror\|Wno-error\|deprecat" | tail -20
 
       - name: Create boot.img (Samsung Exynos 850 v2)
         run: |
