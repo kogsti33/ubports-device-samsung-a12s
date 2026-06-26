@@ -61,13 +61,13 @@ jobs:
       - name: Copy kernel artifacts
         run: |
           mkdir -p output
-          cp kernel-tree/arch/arm64/boot/Image output/
-          cp kernel-tree/arch/arm64/boot/dts/exynos/*.dtb output/ 2>/dev/null || true
+          cp kernel-tree/arch/arm64/boot/Image output/Image
+          cp kernel-tree/arch/arm64/boot/dts/exynos/exynos850*.dtb output/ 2>/dev/null || true
           find kernel-tree/arch/arm64/boot/dts -name "*.dtbo" -exec cp {} output/ \; 2>/dev/null || true
           echo "=== Built artifacts ==="
           ls -lh output/
 
-      - name: Create boot.img (Samsung v2 format)
+      - name: Build boot.img (Samsung Exynos 850 v2)
         run: |
           sudo apt-get install -y python3
 
@@ -203,12 +203,13 @@ jobs:
           python3 /tmp/mkbootimg.py output/Image output/boot.img
           ls -lh output/boot.img
 
-      - name: Upload kernel image
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ubuntu-touch-a12s-kernel
+          name: Samsung-A12s-Ubports-Boot
           path: |
             output/Image
-            output/*.dtb
+            output/exynos850*.dtb
             output/*.dtbo
             output/boot.img
+          if-no-files-found: warn
