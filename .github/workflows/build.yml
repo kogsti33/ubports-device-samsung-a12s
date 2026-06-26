@@ -37,10 +37,9 @@ jobs:
         run: |
           cd kernel-tree
 
-          # Fix Kconfig assembler check - old kernel 4.19 doesn't recognize new GCC output
-          if [ -f scripts/Kconfig.include ]; then
-            sed -i 's/if ! shell -c "$cc -v" 2>&1 | grep -q assembler/if false/' scripts/Kconfig.include
-          fi
+          # Fix as-version.sh - new GCC assembler output not recognized by old kernel 4.19
+          printf '#!/bin/sh\necho "GNU 110000"\nexit 0\n' > scripts/as-version.sh
+          chmod +x scripts/as-version.sh
 
           # Remove -Werror from Makefile
           sed -i 's/-Werror/-Wno-error/g' Makefile
