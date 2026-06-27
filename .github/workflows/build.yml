@@ -135,12 +135,9 @@ jobs:
           python3 /tmp/mkbootimg.py output/Image output/boot.img
           ls -lh output/
 
-      - name: Rename all artifacts to .img for TWRP
+      - name: List final artifacts
         run: |
           cd output
-          cp boot.img boot.img
-          for f in *.dtb; do [ -f "$f" ] && cp "$f" "${f%.dtb}.dtb.img"; done 2>/dev/null || true
-          for f in *.dtbo; do [ -f "$f" ] && cp "$f" "${f%.dtbo}.dtbo.img"; done 2>/dev/null || true
           echo "=== Final artifacts ==="
           ls -lh
 
