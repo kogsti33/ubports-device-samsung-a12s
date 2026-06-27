@@ -100,7 +100,7 @@ jobs:
               total_size = ramdisk_offset
 
               os_version = (11 << 14) | (0 << 7) | 0
-              os_patch_level = (23 << 4) | 1
+              patch_level = (2023 << 4) | 1
 
               header = bytearray(header_size)
               header[0:8] = b'ANDROID!'
@@ -113,7 +113,7 @@ jobs:
               struct.pack_into('<I', header, 32, tags_addr)
               struct.pack_into('<I', header, 36, page_size)
               struct.pack_into('<I', header, 40, header_version)
-              struct.pack_into('<I', header, 44, (os_version << 16) | os_patch_level)
+              struct.pack_into('<I', header, 44, (patch_level << 16) | os_version)
 
               name = b'SRPUE06B013'
               header[48:48+len(name)] = name
