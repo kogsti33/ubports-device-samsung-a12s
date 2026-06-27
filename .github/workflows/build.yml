@@ -137,20 +137,12 @@ jobs:
 
       - name: List final artifacts
         run: |
-          cd output
-          echo "=== Final artifacts ==="
-          ls -lh
+          echo "=== boot.img ready ==="
+          ls -lh output/boot.img
 
-      - name: Upload build artifacts
+      - name: Upload boot.img
         uses: actions/upload-artifact@v4
         with:
-          name: Samsung-A12s-Ubports-Boot
+          name: boot-a12s
           path: output/boot.img
-          if-no-files-found: error
-
-      - name: Upload kernel Image
-        uses: actions/upload-artifact@v4
-        with:
-          name: Samsung-A12s-kernel
-          path: output/Image
           if-no-files-found: error
